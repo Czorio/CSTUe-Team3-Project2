@@ -53,7 +53,7 @@ def register(atlas, patient, ifPrint = 0):
     patient0 = image, patienr1 = manual
     """
     #  Set the parameterMap
-    parameterVec = setParameters()
+    parameterVec = setParameters0()
     #  Initilize a SimpleElastix instance
     SimpleElastix = SimpleITK.SimpleElastix()
     SimpleElastix.SetLogToFile(True)
@@ -61,8 +61,9 @@ def register(atlas, patient, ifPrint = 0):
         SimpleElastix.LogToConsoleOn()
     #  Set the parameterMap
     SimpleElastix.SetParameterMap(parameterVec)
+    SimpleElastix.SetParameter('Interpolator', 'BSplineInterpolator') 
     #  ifPrint
-    if ifPrint == 1:
+    if ifPrint == 0:
         SimpleElastix.PrintParameterMap()
     # A list to store results of patient image
     resultPatientImage = []
@@ -119,7 +120,11 @@ def register(atlas, patient, ifPrint = 0):
         reslutPatientScore.append(resultScore)
     return resultPatientImage, resultPatientManual, reslutPatientScore
     
-def setParameters():
+def setParameters0():
+    """
+    This is the basic parameters set.
+    Not to much defult values are changed
+    """
     parameterVec = SimpleITK.VectorOfParameterMap()
 
     #rigid = SimpleITK.GetDefaultParameterMap('rigid')
@@ -138,12 +143,21 @@ def setParameters():
     traslation['Metric'] = ['AdvancedMattesMutualInformation','AdvancedNormalizedCorrelation']
     affine['Metric'] = ['AdvancedMattesMutualInformation','AdvancedNormalizedCorrelation']
     bspline['Metric'] = ['AdvancedMattesMutualInformation','AdvancedNormalizedCorrelation']
-
+    
+    traslation['Metric0Weight'] = '1'
+    traslation['Metric1Weight'] = '1'
+    
+    affine['Metric0Weight'] = '1'
+    affine['Metric1Weight'] = '1'
+    
+    bspline['Metric0Weight'] = '1'
+    bspline['Metric1Weight'] = '1'
     #parameterVec.append(rigid)
     parameterVec.append(traslation)
     parameterVec.append(affine)
     parameterVec.append(bspline)
     return parameterVec
+
 #%%
 def selectResults(resultImage, resultManuals, resultScore):
     """
@@ -160,11 +174,11 @@ def selectResults(resultImage, resultManuals, resultScore):
         resultSc.append(resultScore[i][maxPos])
     for i in range(len(resultScore)):
         result = resultScore[i]
-        SimpleITK.WriteImage(resultIm[i],r'.\result\resultImage' + '%f.mhd' %max(result))
-        SimpleITK.WriteImage(resultMn[i],r'.\result\resultManual'+'%f.mhd' %max(result))
+        SimpleITK.WriteImage(resultIm[i],r'.\result\resultImage' + '(%f).mhd' %max(result))
+        SimpleITK.WriteImage(resultMn[i],r'.\result\resultManual'+'(%f).mhd' %max(result))
     return resultSc, resultIm, resultMn
 #%%
 atlas, patient = readData()
-resultImage, resultManuals, resultScore = register(atlas, patient)
+resultImage, resultManuals, resultScore = register(atlas, patient, ifPrint=0)
 #%%
 resultSc, resultIm, resultMn = selectResults(resultImage, resultManuals, resultScore)
