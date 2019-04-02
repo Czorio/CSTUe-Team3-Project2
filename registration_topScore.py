@@ -65,8 +65,10 @@ def register(atlas, patient, ifPrint = 0):
     resultPatientImage = []
     # A list to store results of patient Manuals
     resultPatientManual = []
-    # A list to store results of patient score
-    reslutPatientScore = []
+    # A list to store results of patient Dice score
+    resultPatientDiceScore = []
+    # A list to store results of patient MI score
+    resultPatientMIscore = []
     #  Lood through the patient folder
     for patientImage, patientManual in zip(patient[0], patient[1]):
         #  A list to store all the reslut image
@@ -74,7 +76,9 @@ def register(atlas, patient, ifPrint = 0):
         #  A list to store all the reversed manuals
         resultManuals = []
         #  A list to store all the dice scores
-        resultScore = []
+        resultDiceScore = []
+        # A list to store all MI scores
+        resultMIscore = []
         #  Set the fixed image
         SimpleElastix.SetFixedImage(patientImage)
         #  Get the origin of the fixed image
@@ -87,6 +91,7 @@ def register(atlas, patient, ifPrint = 0):
             #  Set the moving image
             SimpleElastix.SetMovingImage(atlasImage)
             #  Do the registration
+            SimpleElastix.SetLogToFile(True)
             SimpleElastix.Execute()
             print('\nOne registration done!')
             resultImage.append(SimpleElastix.GetResultImage())
@@ -109,12 +114,40 @@ def register(atlas, patient, ifPrint = 0):
             measureFilter.Execute(reversedManual, atlasManual)
             print('Dice scores done!')
             diceScore = measureFilter.GetDiceCoefficient()
-            resultScore.append(diceScore)
+            resultDiceScore.append(diceScore)
             print('The dice score is %f' %diceScore)
+
+            # Read-in the log file in order to get mutual informations
+            elastixLogPath = r'.\elastix.log'
+            finalMIValue = 0
+            pattern = re.compile('Final metric value  = (?P<value>[+-.0-9]{9})')
+            with open(elastixLogPath) as log:
+                m = re.search(pattern, log.read())
+                try:
+                    finalMIValue = float(m.group('value'))
+                    resultMIscore.append(finalMIValue)
+                except:
+                    raise Exception('Final metric value not found in "elastix.log".')
+            print('The (log) final MI score is {}'.format(finalMIValue))
+            os.remove(r'.\elastix.log')
+             # Read-in the log file in order to get mutual informations
+            elastixLogPath = r'.\IterationInfo.1.R3.txt'
+            finalMIValue = 0
+            pattern = re.compile('255\t(?P<value>[+-.0-9]{9})')
+            with open(elastixLogPath) as log:
+                m = re.search(pattern, log.read())
+                try:
+                    finalMIValue = float(m.group('value'))
+                    #resultMIscore.append(finalMIValue)
+                except:
+                    raise Exception('Final metric value not found in "elastix.log".')
+            print('The IterationInfo.txt MI score is %f' %finalMIValue)
         resultPatientImage.append(resultImage)
         resultPatientManual.append(resultManuals)
-        reslutPatientScore.append(resultScore)
-    return resultPatientImage, resultPatientManual, reslutPatientScore
+        resultPatientDiceScore.append(resultDiceScore)
+        resultPatientMIscore.append(resultMIscore)
+        
+    return resultPatientImage, resultPatientManual, resultPatientDiceScore, resultPatientMIscore
     
 def setParameters0():
     """
