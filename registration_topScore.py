@@ -8,39 +8,35 @@ in the atlas respectively.  And then select the best results (with higest dice s
 """
 import SimpleITK
 import os
+import random
 
-def readData(path_patient = r'.\Patient', path_atlas = r'.\Atlas'):
+def readData(nrPatients, data_path = r'.\TrainingData'):
     """
     Read in all the data in the folder
     Returns the path of each file.
     """
-    #  List of path
-    atlas_path = []
-    atlas_manual_path = []
-    patient_path = []
-    patient_manual_path = []
-    #  List of images
+    # Atlas list contains moving images and patient list contains fixed images
     atlas = []
-    atlas_maunal = []
+    atlas_manual = []
     patient = []
-    patienr_manual = []
-    #  Read in all the atlas
-    for file in os.listdir(path_atlas):
-        file_name = path_atlas + '\\' + file    
-        atlas_path.append(file_name + '\\' + 'mr_bffe.mhd')
-        atlas_manual_path.append(file_name + '\\' + 'prostaat.mhd')
+    patient_manual = []
+
+    #  Read in all the images and manuals
+    for file in os.listdir(data_path):
+        file_name = data_path + '\\' + file    
         atlas.append(SimpleITK.ReadImage(file_name + '\\' + 'mr_bffe.mhd'))
-        atlas_maunal.append(SimpleITK.ReadImage(file_name + '\\' + 'prostaat.mhd'))
-    #  Read in all the patients
-    for file in os.listdir(path_patient):
-        file_name = path_patient + '\\' + file
-        patient_path.append(file_name + '\\' + 'mr_bffe.mhd')
-        patient_manual_path.append(file_name + '\\' + 'prostaat.mhd')
-        patient.append(SimpleITK.ReadImage(file_name + '\\' + 'mr_bffe.mhd'))
-        patienr_manual.append(SimpleITK.ReadImage(file_name + '\\' + 'prostaat.mhd'))
-    print('There are %d atlases data and %d patient' %(len(atlas_path), len(patient_path)))
+        atlas_manual.append(SimpleITK.ReadImage(file_name + '\\' + 'prostaat.mhd'))
+    # Get <nrPatients> images out of the atlas data set and append to patient list
+    for i in range(nrPatients):
+        index = random.randint(0,len(atlas)-1)
+        patient.append(atlas[index])
+        patient_manual.append(atlas_manual[index])
+        atlas.pop(index)
+        atlas_manual.pop(index)
+        
+    print('There is data available of %d atlases and %d patients' %(len(atlas), len(patient)))
     
-    return [atlas, atlas_maunal], [patient, patienr_manual]
+    return [atlas, atlas_manual], [patient, patient_manual]
 
 def register(atlas, patient, ifPrint = 0):
     """
@@ -178,7 +174,7 @@ def selectResults(resultImage, resultManuals, resultScore):
         SimpleITK.WriteImage(resultMn[i],r'.\result\resultManual'+'(%f).mhd' %max(result))
     return resultSc, resultIm, resultMn
 #%%
-atlas, patient = readData()
+atlas, patient = readData(5)
 resultImage, resultManuals, resultScore = register(atlas, patient, ifPrint=0)
 #%%
 resultSc, resultIm, resultMn = selectResults(resultImage, resultManuals, resultScore)
