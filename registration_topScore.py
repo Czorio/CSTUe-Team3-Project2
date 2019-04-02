@@ -9,6 +9,7 @@ in the atlas respectively.  And then select the best results (with higest dice s
 import SimpleITK
 import os
 import random
+import re
 
 def readData(nrPatients, data_path = r'.\TrainingData'):
     """
