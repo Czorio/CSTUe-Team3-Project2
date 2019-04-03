@@ -3,41 +3,67 @@
 Created on Sun Mar 31 20:27:11 2019
 Update 3.31: This code can register the files in the patient floder to the files
 in the atlas respectively.  And then select the best results (with higest dice socre).
-
+Update 4.1: 
 @author: lxs
 """
 import SimpleITK
 import os
-import random
 import re
+import sys
+ 
+class TextArea(object):  
+  
+    def __init__(self):  
+        self.buffer = []  
+  
+    def write(self, *args, **kwargs):  
+        self.buffer.append(args)  
+        
+def getMetricScore(elastixLogPath):
+    finalMetricValue = 0
+    pattern = re.compile('Final metric value  = (?P<value>[+-.0-9]{9})')
 
-def readData(nrPatients, data_path = r'.\TrainingData'):
+    with open(elastixLogPath) as log:
+        m = re.search(pattern, log.read())
+        try:
+            finalMetricValue = float(m.group('value'))
+        except:
+            raise Exception('Final metric value not found in "elastix.log".')
+    print('The final score is %f' %finalMetricValue)
+    return finalMetricValue
+    
+def readData(path_patient = r'.\Patient', path_atlas = r'.\Atlas'):
     """
     Read in all the data in the folder
     Returns the path of each file.
     """
-    # Atlas list contains moving images and patient list contains fixed images
+    #  List of path
+    atlas_path = []
+    atlas_manual_path = []
+    patient_path = []
+    patient_manual_path = []
+    #  List of images
     atlas = []
-    atlas_manual = []
+    atlas_maunal = []
     patient = []
-    patient_manual = []
-
-    #  Read in all the images and manuals
-    for file in os.listdir(data_path):
-        file_name = data_path + '\\' + file    
+    patienr_manual = []
+    #  Read in all the atlas
+    for file in os.listdir(path_atlas):
+        file_name = path_atlas + '\\' + file    
+        atlas_path.append(file_name + '\\' + 'mr_bffe.mhd')
+        atlas_manual_path.append(file_name + '\\' + 'prostaat.mhd')
         atlas.append(SimpleITK.ReadImage(file_name + '\\' + 'mr_bffe.mhd'))
-        atlas_manual.append(SimpleITK.ReadImage(file_name + '\\' + 'prostaat.mhd'))
-    # Get <nrPatients> images out of the atlas data set and append to patient list
-    for i in range(nrPatients):
-        index = random.randint(0,len(atlas)-1)
-        patient.append(atlas[index])
-        patient_manual.append(atlas_manual[index])
-        atlas.pop(index)
-        atlas_manual.pop(index)
-        
-    print('There is data available of %d atlases and %d patients' %(len(atlas), len(patient)))
+        atlas_maunal.append(SimpleITK.ReadImage(file_name + '\\' + 'prostaat.mhd'))
+    #  Read in all the patients
+    for file in os.listdir(path_patient):
+        file_name = path_patient + '\\' + file
+        patient_path.append(file_name + '\\' + 'mr_bffe.mhd')
+        patient_manual_path.append(file_name + '\\' + 'prostaat.mhd')
+        patient.append(SimpleITK.ReadImage(file_name + '\\' + 'mr_bffe.mhd'))
+        patienr_manual.append(SimpleITK.ReadImage(file_name + '\\' + 'prostaat.mhd'))
+    print('There are %d atlases data and %d patient' %(len(atlas_path), len(patient_path)))
     
-    return [atlas, atlas_manual], [patient, patient_manual]
+    return [atlas, atlas_maunal], [patient, patienr_manual]
 
 def register(atlas, patient, ifPrint = 0):
     """
@@ -53,7 +79,6 @@ def register(atlas, patient, ifPrint = 0):
     parameterVec = setParameters0()
     #  Initilize a SimpleElastix instance
     SimpleElastix = SimpleITK.SimpleElastix()
-    SimpleElastix.SetLogToFile(True)
     if ifPrint == 1:
         SimpleElastix.LogToConsoleOn()
     #  Set the parameterMap
@@ -66,10 +91,8 @@ def register(atlas, patient, ifPrint = 0):
     resultPatientImage = []
     # A list to store results of patient Manuals
     resultPatientManual = []
-    # A list to store results of patient Dice score
-    resultPatientDiceScore = []
-    # A list to store results of patient MI score
-    resultPatientMIscore = []
+    # A list to store results of patient score
+    reslutPatientScore = []
     #  Lood through the patient folder
     for patientImage, patientManual in zip(patient[0], patient[1]):
         #  A list to store all the reslut image
@@ -77,9 +100,7 @@ def register(atlas, patient, ifPrint = 0):
         #  A list to store all the reversed manuals
         resultManuals = []
         #  A list to store all the dice scores
-        resultDiceScore = []
-        # A list to store all MI scores
-        resultMIscore = []
+        resultScore = []
         #  Set the fixed image
         SimpleElastix.SetFixedImage(patientImage)
         #  Get the origin of the fixed image
@@ -92,7 +113,6 @@ def register(atlas, patient, ifPrint = 0):
             #  Set the moving image
             SimpleElastix.SetMovingImage(atlasImage)
             #  Do the registration
-            SimpleElastix.SetLogToFile(True)
             SimpleElastix.Execute()
             print('\nOne registration done!')
             resultImage.append(SimpleElastix.GetResultImage())
@@ -105,7 +125,7 @@ def register(atlas, patient, ifPrint = 0):
             print('Label voting done!')
             #  Set the origin of reversed maunal
             reversedManual.SetOrigin(manualOrigin)
-            resultManuals.append(reversedManual)   
+            resultManuals.append(reversedManual) 
             #  Calculate the dice score
             measureFilter = SimpleITK.LabelOverlapMeasuresImageFilter()
             #  Have to change the tolerance to make the code work
@@ -115,40 +135,12 @@ def register(atlas, patient, ifPrint = 0):
             measureFilter.Execute(reversedManual, atlasManual)
             print('Dice scores done!')
             diceScore = measureFilter.GetDiceCoefficient()
-            resultDiceScore.append(diceScore)
+            resultScore.append(diceScore)
             print('The dice score is %f' %diceScore)
-
-            # Read-in the log file in order to get mutual informations
-            elastixLogPath = r'.\elastix.log'
-            finalMIValue = 0
-            pattern = re.compile('Final metric value  = (?P<value>[+-.0-9]{9})')
-            with open(elastixLogPath) as log:
-                m = re.search(pattern, log.read())
-                try:
-                    finalMIValue = float(m.group('value'))
-                    resultMIscore.append(finalMIValue)
-                except:
-                    raise Exception('Final metric value not found in "elastix.log".')
-            print('The (log) final MI score is {}'.format(finalMIValue))
-            os.remove(r'.\elastix.log')
-             # Read-in the log file in order to get mutual informations
-            elastixLogPath = r'.\IterationInfo.1.R3.txt'
-            finalMIValue = 0
-            pattern = re.compile('255\t(?P<value>[+-.0-9]{9})')
-            with open(elastixLogPath) as log:
-                m = re.search(pattern, log.read())
-                try:
-                    finalMIValue = float(m.group('value'))
-                    #resultMIscore.append(finalMIValue)
-                except:
-                    raise Exception('Final metric value not found in "elastix.log".')
-            print('The IterationInfo.txt MI score is %f' %finalMIValue)
         resultPatientImage.append(resultImage)
         resultPatientManual.append(resultManuals)
-        resultPatientDiceScore.append(resultDiceScore)
-        resultPatientMIscore.append(resultMIscore)
-        
-    return resultPatientImage, resultPatientManual, resultPatientDiceScore, resultPatientMIscore
+        #reslutPatientScore.append(resultScore)
+    return resultPatientImage, resultPatientManual, reslutPatientScore
     
 def setParameters0():
     """
@@ -189,6 +181,57 @@ def setParameters0():
     return parameterVec
 
 #%%
+def mutilRegistration(resultScore, atlas, patient, ifPrint=0):
+    """
+    Select a the top three best results and register them to the unseen patient
+    Then mix the segementation by label voting
+    """
+    #  Set the parameterMap
+    parameterVec = setParameters0()
+    #  Initilize a SimpleElastix instance
+    SimpleElastix = SimpleITK.SimpleElastix()
+    SimpleElastix.SetLogToFile(True)
+    if ifPrint == 1:
+        SimpleElastix.LogToConsoleOn()
+    #  Set the parameterMap
+    SimpleElastix.SetParameterMap(parameterVec)
+    SimpleElastix.SetParameter('Interpolator', 'BSplineInterpolator') 
+    #  ifPrint
+    if ifPrint == 1:
+        SimpleElastix.PrintParameterMap()
+    #  A list to sotre resluts
+    resultSegmentation = []
+
+    for i in range(len(resultScore)):
+        #Loop through patient data
+        resultLabels = SimpleITK.VectorOfImage()
+        #  Set the fixed image
+        SimpleElastix.SetFixedImage(patient[0][i])
+        imageOrigin = patient[0][i].GetOrigin()
+        resultdownUp = sorted(resultScore[i],reverse = True)
+        for j in range(3):
+            topScore = resultdownUp[j]
+            indexScore = resultScore[i].index(topScore)
+            atlas[0][indexScore].SetOrigin(imageOrigin)
+            SimpleElastix.SetMovingImage(atlas[0][indexScore])
+            SimpleElastix.Execute()
+            resultLabels.push_back(SimpleITK.Transformix(atlas[1][indexScore], SimpleElastix.GetTransformParameterMap()))
+            print('One registration done!')
+        #  Label voting to pick the mixed label
+        print('One mix done!')
+        fixedLabel = SimpleITK.LabelVoting(resultLabels)
+        #  Calculate dice score
+        measureFilter = SimpleITK.LabelOverlapMeasuresImageFilter()
+        #  Have to change the tolerance to make the code work
+        measureFilter.SetGlobalDefaultCoordinateTolerance(1e3)
+        reversedOrigin = patient[1][i].GetOrigin()
+        fixedLabel.SetOrigin(reversedOrigin)
+        measureFilter.Execute(fixedLabel, patient[1][i])
+        diceScore = measureFilter.GetDiceCoefficient()
+        print('The dice score with mixed segmentation is %f' %diceScore)
+        SimpleITK.WriteImage(fixedLabel,r'.\result\mixedSegmentation' + 'Patient%f.mhd' %diceScore)
+        resultSegmentation.append(fixedLabel)
+
 def selectResults(resultImage, resultManuals, resultScore):
     """
     Select the best results and save
@@ -207,8 +250,11 @@ def selectResults(resultImage, resultManuals, resultScore):
         SimpleITK.WriteImage(resultIm[i],r'.\result\resultImage' + '(%f).mhd' %max(result))
         SimpleITK.WriteImage(resultMn[i],r'.\result\resultManual'+'(%f).mhd' %max(result))
     return resultSc, resultIm, resultMn
-#%%
-atlas, patient = readData(5)
+
+#%%  Do the registertion and get the list of score
+atlas, patient = readData()
 resultImage, resultManuals, resultScore = register(atlas, patient, ifPrint=0)
-#%%
+#%%  Select the best result with single atlas
 resultSc, resultIm, resultMn = selectResults(resultImage, resultManuals, resultScore)
+#%%  Use the top 3th best results and create a mixed segementation
+#mixedLabel = mutilRegistration(resultScore, atlas, patient, ifPrint=0)
