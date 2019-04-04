@@ -55,5 +55,8 @@ for res_id in res_paths[1:]:
     hd.Execute(result, ground_truth)
     print(base_id, hd.GetHausdorffDistance())
     
+    if not os.path.exists(os.path.join(".\Metrics", base_id)):
+        os.mkdir(os.path.join(".\Metrics", base_id))
+    
     sitk.WriteImage(determine_overlap_mip(result, ground_truth), os.path.join(".\Metrics", base_id, "overlap_mip.mhd"))
     sitk.WriteImage(determine_overlap(result, ground_truth), os.path.join(".\Metrics", base_id, "overlap.mhd"))
